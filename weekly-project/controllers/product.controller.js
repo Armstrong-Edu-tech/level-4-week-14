@@ -1,7 +1,6 @@
 const Product = require('../models/product.model');
 const fs = require('fs');
 
-// Add Product
 const addProduct = async (req, res) => {
     try {
         const { name, quantity, price } = req.body;
@@ -36,7 +35,6 @@ const addProduct = async (req, res) => {
     }
 };
 
-// Update Product
 const updateProduct = async (req, res) => {
     try {
         const { name, quantity, price } = req.body;
@@ -48,7 +46,6 @@ const updateProduct = async (req, res) => {
             return res.status(404).json({ success: false, message: 'Product not found' });
         }
 
-        // Update fields
         product.name = name || product.name;
         product.quantity = quantity >= 1 ? quantity : product.quantity;
         product.price = price >= 0 ? price : product.price;
@@ -68,7 +65,6 @@ const updateProduct = async (req, res) => {
     }
 };
 
-// Soft Delete Product (mark unavailable)
 const softDeleteProduct = async (req, res) => {
     try {
         const product = await Product.findByIdAndUpdate(

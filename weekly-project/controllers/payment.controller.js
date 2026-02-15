@@ -5,12 +5,9 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const createPaymentIntent = async (req, res) => {
     try {
         const { items, email, currency = "usd" } = req.body;
-
         if (!items || !Array.isArray(items) || items.length === 0) {
             return res.status(400).json({ message: "Items are required" });
         }
-
-        // Get product details from DB
         const productsWithDetails = await Promise.all(
             items.map(async (item) => {
                 const product = await Product.findById(item.product);
@@ -24,12 +21,10 @@ const createPaymentIntent = async (req, res) => {
             })
         );
 
-        // Calculate total amount
         const amount = productsWithDetails.reduce((acc, item) => acc + item.price * item.quantity, 0);
 
-        // Create Stripe payment intent
         const intent = await stripe.paymentIntents.create({
-            amount: Math.round(amount * 100), // Stripe uses cents
+            amount: Math.round(amount * 100),
             currency,
             metadata: { email, items: JSON.stringify(productsWithDetails) },
             automatic_payment_methods: {
@@ -37,8 +32,8 @@ const createPaymentIntent = async (req, res) => {
                 allow_redirects: "never"
             }
         });
-
-        res.json({ clientSecret: intent.client_secret, paymentIntentId: intent.id, items: productsWithDetails, total: amount });
+        res.json({ clientSecret: intent.client_secret, paymentIntentId: intent.id,
+            items: productsWithDetails, total: amount });
     } catch (error) {
         res.status(400).json({ message: error.message });
     }

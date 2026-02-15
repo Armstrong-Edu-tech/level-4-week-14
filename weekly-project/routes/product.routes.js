@@ -5,8 +5,6 @@ const authenticate = require('../middleware/auth.middleware');
 const authorize = require('../middleware/role.middleware');
 const upload = require('../middleware/upload.middleware');
 
-
-// Add product (admin, single image)
 router.post(
     '/',
     authenticate,
@@ -15,7 +13,6 @@ router.post(
     productController.addProduct
 );
 
-// Update product (admin, single image optional)
 router.put(
     '/:id',
     authenticate,
@@ -24,7 +21,6 @@ router.put(
     productController.updateProduct
 );
 
-// Soft delete product (admin)
 router.delete(
     '/:id',
     authenticate,

@@ -1,7 +1,7 @@
 const User = require('../models/user.model');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 
-// Sign JWT token
 const signToken = (user) => {
     return jwt.sign(
         { id: user._id, role: user.role },
@@ -10,7 +10,6 @@ const signToken = (user) => {
     );
 };
 
-// Register
 const register = async (req, res) => {
     try {
         const { name, email, password } = req.body;
@@ -40,15 +39,21 @@ const register = async (req, res) => {
             return res.status(400).json({ success: false, message: 'Email already exists' });
         }
 
-        const user = await User.create({ name, email, password });
-        res.status(201).json({ success: true, message: 'Registration successful. Please login now.', data: { id: user._id, name: user.name, email: user.email } });
+        const saltRounds = Number(process.env.BCRYPT_SALT_ROUNDS) || 12;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
 
+        const user = await User.create({ name, email, password: hashedPassword });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Registration successful. Please login now.',
+            data: { id: user._id, name: user.name, email: user.email }
+        });
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Server error', error: err.message });
+        return res.status(500).json({ success: false, message: 'Server error', error: err.message });
     }
 };
 
-// Login
 const login = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -58,16 +63,20 @@ const login = async (req, res) => {
         }
 
         const user = await User.findOne({ email }).select('+password');
+        if (!user) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            return res.status(401).json({ success: false, message: 'Invalid email or password' });
+        }
 
-        if (!user || !(await user.correctPassword(password))) {
-            // delay to prevent brute force
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
             await new Promise(resolve => setTimeout(resolve, 1500));
             return res.status(401).json({ success: false, message: 'Invalid email or password' });
         }
 
         const token = signToken(user);
 
-        res.status(200).json({
+        return res.status(200).json({
             success: true,
             message: 'Login successful',
             data: {
@@ -79,9 +88,8 @@ const login = async (req, res) => {
                 }
             }
         });
-
     } catch (err) {
-        res.status(500).json({ success: false, message: 'Server error', error: err.message });
+        return res.status(500).json({ success: false, message: 'Server error', error: err.message });
     }
 };
 

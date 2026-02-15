@@ -1,99 +1,69 @@
 const express = require("express");
-const nodemailer = require("nodemailer");
+const dotenv = require("dotenv");
 const crypto = require("crypto");
+
+dotenv.config();
+
+const sendResetEmail = require("./utils/sendEmail");
 
 const app = express();
 app.use(express.json());
 
-// Mock database (example)
-let users = [
-    {
-        email: "student@example.com",    // <--- Replace with your Gmail
+const users = {
+    "student@example.com": {   // <--- Replace with your Gmail
         password: "123456",
         resetToken: null,
-        resetTokenExpire: null,
+        tokenExpiry: null,
     },
-];
+};
 
-// Configure Nodemailer Transporter
-const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-        user: "yourgmail@gmail.com",     // <--- Replace with your Gmail
-        pass: "yourapppassword",         // <--- Replace with App Password
-    },
-});
+app.post("/request-reset", async (req, res) => {
+    const { email } = req.body;
+    try {
+        const user = users[email];
+        if (!user) return res.status(404).send("User not found");
 
-// Function to send reset password email 
-function sendResetEmail(email, token) {
-    const resetURL = `http://localhost:3000/reset-password/${token}`;
+        const token = crypto.randomBytes(20).toString("hex");
+        const expiry = Date.now() + 15 * 60 * 1000;
 
-    const mailOptions = {
-        from: "yourgmail@gmail.com",     // <--- Replace with your Gmail
-        to: email,
-        subject: "Password Reset Request",
-        html: `
-            <h3>Password Reset Request</h3>
-            <p>Click the button below to reset your password:</p>
-            <a href="${resetURL}" style="
-                background:#007bff;
-                color:#fff;
-                padding:10px 20px;
-                text-decoration:none;
-                border-radius:5px;">
-                Reset Password
-            </a>
-            <p>This link will expire in 15 minutes.</p>
-        `,
-    };
+        user.resetToken = token;
+        user.tokenExpiry = expiry;
 
-    transporter.sendMail(mailOptions, (err, info) => {
-        if (err) console.error('Error sending email:', err);
-        else console.log('Reset email sent:', info.response);
-    });
-}
+        await sendResetEmail({ email, token });
 
-// Request Reset Password Route
-app.post("/request-reset", (req, res) => {
-    const userEmail = req.body.email;
-    const user = users.find((u) => u.email === userEmail);
-
-    if (!user) {
-        return res.status(404).json({ error: "User not found!" });
+        res.status(200).json({ message: "Password reset email sent!" });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
     }
-
-    // Generate a unique token
-    const resetToken = crypto.randomBytes(32).toString("hex");
-    user.resetToken = resetToken;
-    user.resetTokenExpire = Date.now() + 15 * 60 * 1000; // 15 minutes
-
-    sendResetEmail(userEmail, resetToken);
-
-    res.json({ message: "Password reset email sent!" });
 });
 
-// Validate Token & Reset Password Route
 app.post("/reset-password/:token", (req, res) => {
-    const { token } = req.params;
-    const { newPassword } = req.body;
+    try {
+        const { token } = req.params;
+        const { newPassword } = req.body;
+        const user = Object.values(users).find(
+            (u) => u.resetToken === token && u.tokenExpiry > Date.now()
+        );
+        if (!user) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired token",
+            });
+        }
+        user.password = newPassword;
+        user.resetToken = null;
+        user.tokenExpiry = null;
 
-    const user = users.find(
-        (u) => u.resetToken === token && u.resetTokenExpire > Date.now()
-    );
-
-    if (!user) {
-        return res.status(400).json({ error: "Invalid or expired token" });
+        res.status(200).json({
+            success: true,
+            message: "Password has been reset successfully!",
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, error: error.message, });
     }
-
-    // Update password
-    user.password = newPassword;
-    user.resetToken = null;
-    user.resetTokenExpire = null;
-
-    res.json({ message: "Password updated successfully!" });
 });
 
-// Start Server
-app.listen(3000, () => {
-    console.log("Server running on http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
 });
